@@ -18,3 +18,5 @@ python convert_hf_to_gguf.py ..\phi2-sparql-merged --outfile phi2-sparql.gguf --
 8. Скопируйте Modelfile в папку llama.cpp
 9. Создайте модель введя
 ollama create sparql-assistant -f Modelfile
+10. Запустите модель и вводите вопросы
+ollama run sparql-assistant
