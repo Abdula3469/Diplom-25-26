@@ -5,9 +5,9 @@ from transformers import AutoModelForCausalLM, AutoTokenizer, Trainer, TrainingA
 from datasets import Dataset
 from peft import LoraConfig, get_peft_model, TaskType
 import os
-
+# Это переменная окружения для Pytorhc, она позволяет мне избежать фрагментации памяти, из-за которой у меня случались ошибки нехватки памяти
 os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
-
+# Туут 4бит квантование вместо 16бит, что позволяет загрузить модель на 4гб видеопамяти, ведь весить будет она в 4 раз меньше
 bnb_config = BitsAndBytesConfig(
     load_in_4bit=True,
     bnb_4bit_quant_type="nf4",
@@ -24,8 +24,7 @@ tokenizer = AutoTokenizer.from_pretrained(
 
 if tokenizer.pad_token is None:
     tokenizer.pad_token = tokenizer.eos_token
-
-print("Загрузка модели")
+## Тут происзодит ззагрузка модели  с квантованием. Devise map auto автоматически определяет куда будут загружаться слои, на гпу или кпу, с приоритетом на гпу
 model = AutoModelForCausalLM.from_pretrained(
     model_name,
     quantization_config=bnb_config,
@@ -33,7 +32,7 @@ model = AutoModelForCausalLM.from_pretrained(
     trust_remote_code=True,
     torch_dtype=torch.float16,
 )
-
+#это же конфигурация лора, задача установлека как генерация текста, QKVO это: Запросы, ключи, значения и выходная проекция. Выбраны они потмоу что они самые важные в тансформераз
 lora_config = LoraConfig(
     task_type=TaskType.CAUSAL_LM,
     r=4,
@@ -45,7 +44,7 @@ lora_config = LoraConfig(
 
 model = get_peft_model(model, lora_config)
 model.print_trainable_parameters()
-
+#Тут происходит подготовка данных, модель должна мочь различать что написал юзер(вопрос), а что должна сненерировать сама моделль(sparql-запрос)
 def load_and_format_data(file_path):
     """Загружает данные и форматирует для обучения"""
     formatted_data = []
@@ -65,7 +64,7 @@ def load_and_format_data(file_path):
             formatted_data.append({"text": full_text})
     
     return formatted_data
-
+#Тут происходит токенизация
 def tokenize_function(examples):
     """Токенизирует текст и создает labels для обучения"""
     
@@ -83,7 +82,6 @@ def tokenize_function(examples):
     
     return tokenized
 
-print("Чекпоинт проверки кода")
 train_data = load_and_format_data("training_data.jsonl")
 dataset = Dataset.from_list(train_data)
 
@@ -97,7 +95,7 @@ data_collator = DataCollatorForLanguageModeling(
     tokenizer=tokenizer,
     mlm=False,
 )
-
+#Тут мы настраиваем обучение, куда сохранять, количетсво эпох, размер батча и т.п
 training_args = TrainingArguments(
     output_dir="./phi2-sparql-lora",
     num_train_epochs=5,
@@ -114,7 +112,7 @@ training_args = TrainingArguments(
     dataloader_pin_memory=False,
     report_to="none",
 )
-
+#А вот тут мы жуе запускаем обучение
 trainer = Trainer(
     model=model,
     args=training_args,
@@ -125,12 +123,8 @@ trainer = Trainer(
 print(f"Размер: {len(tokenized_dataset)} примеров")
 print(f"Шаги: {len(tokenized_dataset) * 5} (5 эпох)\n")
 
-try:
-    trainer.train()
+trainer.train()
     
-    print("\nСохраняемся")
-    model.save_pretrained("./phi2-sparql-lora-final")
-    tokenizer.save_pretrained("./phi2-sparql-lora-final")
-    
-except Exception as e:
-    print(f"\nОшибка: {e}")
+print("\nНу а тут Сохраняемся")
+model.save_pretrained("./phi2-sparql-lora-final")
+tokenizer.save_pretrained("./phi2-sparql-lora-final")
