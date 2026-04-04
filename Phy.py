@@ -35,7 +35,7 @@ model = AutoModelForCausalLM.from_pretrained(
 #это же конфигурация лора, задача установлека как генерация текста, QKVO это: Запросы, ключи, значения и выходная проекция. Выбраны они потмоу что они самые важные в тансформераз
 lora_config = LoraConfig(
     task_type=TaskType.CAUSAL_LM,
-    r=4,
+    r=32,
     lora_alpha=16,
     lora_dropout=0.1,
     target_modules=["q_proj", "v_proj", "k_proj", "o_proj"],
