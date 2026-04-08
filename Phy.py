@@ -15,6 +15,13 @@ bnb_config = BitsAndBytesConfig(
     bnb_4bit_use_double_quant=True
 )
 
+#bnb_config = BitsAndBytesConfig(
+#    load_in_8bit=True,                 
+#    llm_int8_threshold=6.0,     
+#    llm_int8_enable_fp32_cpu_offload=True,      
+#    llm_int8_has_fp16_weight=True,       
+#)
+
 model_name = "microsoft/phi-2"
 tokenizer = AutoTokenizer.from_pretrained(
     model_name,
@@ -34,12 +41,11 @@ model = AutoModelForCausalLM.from_pretrained(
 )
 #это же конфигурация лора, задача установлека как генерация текста, QKVO это: Запросы, ключи, значения и выходная проекция. Выбраны они потмоу что они самые важные в тансформераз
 lora_config = LoraConfig(
-    task_type=TaskType.CAUSAL_LM,
-    r=32,
-    lora_alpha=16,
+    r=128,                  
+    lora_alpha=256,           
     lora_dropout=0.1,
-    target_modules=["q_proj", "v_proj", "k_proj", "o_proj"],
-    bias="none",
+    target_modules=["q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "up_proj"],
+    bias="lora_only",
 )
 
 model = get_peft_model(model, lora_config)
@@ -98,19 +104,21 @@ data_collator = DataCollatorForLanguageModeling(
 #Тут мы настраиваем обучение, куда сохранять, количетсво эпох, размер батча и т.п
 training_args = TrainingArguments(
     output_dir="./phi2-sparql-lora",
-    num_train_epochs=5,
+    num_train_epochs=4,
     per_device_train_batch_size=1,
     gradient_accumulation_steps=8,
-    learning_rate=2e-4,
-    warmup_steps=50,
+    learning_rate=1.5e-4,
+    warmup_steps=0.1,
     logging_steps=10,
     save_steps=200,
     save_total_limit=3,
     fp16=True,
     gradient_checkpointing=True,
     remove_unused_columns=False,
+    weight_decay=0.01,
     dataloader_pin_memory=False,
-    report_to="none",
+    report_to="none",            
+    max_grad_norm=0.5,
 )
 #А вот тут мы жуе запускаем обучение
 trainer = Trainer(
