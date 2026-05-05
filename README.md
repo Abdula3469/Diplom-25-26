@@ -22,7 +22,7 @@ pip install transformers==4.36.0 peft==0.7.0 bitsandbytes==0.41.3 accelerate==0.
    ```
 2. **run_phy** (Запуск модели):
    ```bash
-   python convert_to_ollama.py
+   python run_phy
    ```
 
 ## 4. Конвертация в формат GGUF(пока что устарело)
