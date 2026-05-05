@@ -20,12 +20,12 @@ pip install transformers==4.36.0 peft==0.7.0 bitsandbytes==0.41.3 accelerate==0.
    ```bash
    python Phy.py
    ```
-2. **convert_to_ollama.py** (объединение весов):
+2. **run_phy** (Запуск модели):
    ```bash
    python convert_to_ollama.py
    ```
 
-## 4. Конвертация в формат GGUF
+## 4. Конвертация в формат GGUF(пока что устарело)
 Для работы с Ollama модель нужно конвертировать с помощью `llama.cpp`.
 
 1. Склонируйте репозиторий `llama.cpp`:
