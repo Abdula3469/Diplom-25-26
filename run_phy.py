@@ -1,4 +1,3 @@
-# run_sparql_fixed.py
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from peft import PeftModel
@@ -35,7 +34,7 @@ class SparqlAssistant:
         print("Модель Загружена")
     
     def extract_first_sparql(self, text: str) -> str:
-        """извлекает первый корректный ызфкйд запрос"""
+        """извлекает первый корректный SPARQL запрос"""
         
         pattern = r'(PREFIX\s+wd:\s*<[^>]+>\s+PREFIX\s+wdt:\s*<[^>]+>.*?SELECT\s+\?answer\s+WHERE\s*\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\})'
         match = re.search(pattern, text, re.DOTALL | re.IGNORECASE)
