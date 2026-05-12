@@ -10,11 +10,13 @@ os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
 bnb_config = BitsAndBytesConfig(
     load_in_4bit=True,
     bnb_4bit_quant_type="nf4",
-    bnb_4bit_compute_dtype=torch.float16,
-    bnb_4bit_use_double_quant=True
+    bnb_4bit_compute_dtype=torch.float32,     
+    bnb_4bit_use_double_quant=True,
 )
 
-model_name = "microsoft/phi-2"
+
+
+model_name = "Qwen/Qwen2-1.5B-Instruct"
 tokenizer = AutoTokenizer.from_pretrained(
     model_name,
     trust_remote_code=True,
@@ -32,16 +34,17 @@ print("Загрузка модели")
 model = AutoModelForCausalLM.from_pretrained(
     model_name,
     quantization_config=bnb_config,
-    device_map="auto",
+    device_map="auto",                        
     trust_remote_code=True,
-    torch_dtype=torch.float16,
+    torch_dtype=torch.float32,              
 )
 
+
 lora_config = LoraConfig(
-    r=128,                  
-    lora_alpha=256,           
+    r=64,                  
+    lora_alpha=128,           
     lora_dropout=0.1,
-    target_modules=["q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "up_proj"],
+    target_modules=["q_proj", "k_proj", "v_proj", "o_proj"],
     bias="lora_only",
 )
 
@@ -57,13 +60,14 @@ def load_and_format_data(file_path):
             
             user_msg = data['messages'][0]['content']
             assistant_msg = data['messages'][1]['content']
+            
             full_text = f"### User:\n{user_msg}\n\n### Assistant:\n{assistant_msg}\n###"
+            
             formatted_data.append({"text": full_text})
     
     return formatted_data
 
 def tokenize_function(examples):
-    
     tokenized = tokenizer(
         examples["text"],
         truncation=True,
@@ -91,13 +95,13 @@ data_collator = DataCollatorForLanguageModeling(
 )
 
 training_args = TrainingArguments(
-    output_dir="./phi2-sparql-lora3",
-    num_train_epochs=5,                   
+    output_dir="./qwen2-sparql-lora",
+    num_train_epochs=5,
     per_device_train_batch_size=1,
     gradient_accumulation_steps=8,
-    learning_rate=2e-4,                   
-    warmup_steps=50,                    
-    warmup_ratio=0.1,                    
+    learning_rate=2e-4,
+    warmup_steps=50,
+    warmup_ratio=0.1,
     logging_steps=10,
     save_steps=200,
     save_total_limit=3,
@@ -106,9 +110,8 @@ training_args = TrainingArguments(
     remove_unused_columns=False,
     weight_decay=0.01,
     dataloader_pin_memory=False,
-    report_to="none",            
+    report_to="none",
     max_grad_norm=0.5,
-    prediction_loss_only=False,
 )
 
 trainer = Trainer(
@@ -120,6 +123,6 @@ trainer = Trainer(
 
 trainer.train()
     
-model.save_pretrained("./phi2-sparql-lora-final3")
-tokenizer.save_pretrained("./phi2-sparql-lora-final3")
+model.save_pretrained("./qwen-final")
+tokenizer.save_pretrained("./qwen-final")
 print("конец")
