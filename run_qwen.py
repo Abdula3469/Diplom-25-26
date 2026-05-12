@@ -6,11 +6,10 @@ import warnings
 warnings.filterwarnings("ignore")
 
 class SparqlAssistant:
-    def __init__(self, adapter_path="./phi2-sparql-lora-final3"):
-        print("Вроде работает")
+    def __init__(self, adapter_path="./qwen-final"):
         
         self.base_model = AutoModelForCausalLM.from_pretrained(
-            "microsoft/phi-2",
+            "Qwen/Qwen2-1.5B-Instruct",
             torch_dtype=torch.float32,
             device_map="cpu",
             trust_remote_code=True,
@@ -20,7 +19,7 @@ class SparqlAssistant:
         self.model = PeftModel.from_pretrained(self.base_model, adapter_path)
         
         self.tokenizer = AutoTokenizer.from_pretrained(
-            "microsoft/phi-2",
+            "Qwen/Qwen2-1.5B-Instruct",
             trust_remote_code=True
         )
         self.tokenizer.pad_token = self.tokenizer.eos_token
@@ -34,7 +33,7 @@ class SparqlAssistant:
         print("Модель Загружена")
     
     def extract_first_sparql(self, text: str) -> str:
-        """извлекает первый корректный SPARQL запрос"""
+        """извлекает первый корректный sparql запрос"""
         
         pattern = r'(PREFIX\s+wd:\s*<[^>]+>\s+PREFIX\s+wdt:\s*<[^>]+>.*?SELECT\s+\?answer\s+WHERE\s*\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\})'
         match = re.search(pattern, text, re.DOTALL | re.IGNORECASE)
@@ -106,7 +105,7 @@ class SparqlAssistant:
             sparql = '\n'.join(result)
         
         return sparql.strip()
-
+    
 if __name__ == "__main__":
     assistant = SparqlAssistant()
     print("Введите exit для выхода")
