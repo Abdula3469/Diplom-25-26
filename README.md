@@ -1,4 +1,4 @@
-# Инструкция запуска
+<img width="256" height="89" alt="image" src="https://github.com/user-attachments/assets/4d7364f0-b1fb-4f83-9bff-0b774c0f810d" /># Инструкция запуска
 
 Этот проект посвящен объединению и запуску модели для генерации SPARQL-запросов с использованием Ollama.
 
@@ -16,16 +16,16 @@ pip install transformers==4.36.0 peft==0.7.0 bitsandbytes==0.41.3 accelerate==0.
 
 ## 3. Обучение и подготовка модели
 Запустите последовательно следующие скрипты:
-1. **Phy.py** (обучение модели):
+1. **Obuchenie.py** (обучение модели):
    ```bash
-   python Phy.py
+   python Obuchenie.py
    ```
-2. **run_phy** (Запуск модели):
+2. **convert_to_ollama.py** (Объединение Базовой модели и обученных слоев):
    ```bash
-   python run_phy
+   python convert_to_ollama.py
    ```
 
-## 4. Конвертация в формат GGUF(пока что устарело)
+## 4. Конвертация в формат GGUF
 Для работы с Ollama модель нужно конвертировать с помощью `llama.cpp`.
 
 1. Склонируйте репозиторий `llama.cpp`:
