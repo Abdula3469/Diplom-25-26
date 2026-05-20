@@ -1,4 +1,4 @@
-<img width="256" height="89" alt="image" src="https://github.com/user-attachments/assets/4d7364f0-b1fb-4f83-9bff-0b774c0f810d" /># Инструкция запуска
+# Инструкция запуска
 
 Этот проект посвящен объединению и запуску модели для генерации SPARQL-запросов с использованием Ollama.
 
@@ -20,9 +20,9 @@ pip install transformers==4.36.0 peft==0.7.0 bitsandbytes==0.41.3 accelerate==0.
    ```bash
    python Obuchenie.py
    ```
-2. **convert_to_ollama.py** (Объединение Базовой модели и обученных слоев):
+2. **merged_model.py** (Объединение Базовой модели и обученных слоев):
    ```bash
-   python convert_to_ollama.py
+   python merged_model.py
    ```
 
 ## 4. Конвертация в формат GGUF
@@ -33,9 +33,9 @@ pip install transformers==4.36.0 peft==0.7.0 bitsandbytes==0.41.3 accelerate==0.
    git clone https://github.com/ggerganov/llama.cpp
    cd llama.cpp
    ```
-2. Запустите конвертацию (убедитесь, что путь к модели верный):
+2. Запустите конвертацию:
    ```bash
-   python convert_hf_to_gguf.py ..\phi2-sparql-merged --outfile phi2-sparql.gguf --outtype q8_0
+   python convert_hf_to_gguf.py ../qwen-final-merged --outfile qwen-sparql999.gguf --outtype f16
    ```
 
 ## 5. Создание и запуск модели в Ollama
