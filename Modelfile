@@ -1,10 +1,12 @@
-FROM ./phi2-sparql.gguf
+FROM ./qwen-sparql999.gguf
 
-PARAMETER temperature 0.1
-PARAMETER num_predict 256
+PARAMETER temperature 0.8
 PARAMETER top_p 0.9
-PARAMETER repeat_penalty 1.1
+PARAMETER num_predict 256
+PARAMETER repeat_penalty 1.2
 PARAMETER stop "###"
+PARAMETER stop "User:"
+PARAMETER stop "Assistant:"
 
 TEMPLATE """### User:
 {{ .Prompt }}
@@ -13,26 +15,18 @@ TEMPLATE """### User:
 """
 
 SYSTEM """
-Ты — эксперт по Wikidata и SPARQL. Твоя задача — генерировать точные SPARQL запросы для Wikidata на основе описания на естественном языке.
+Ты — эксперт по Wikidata. Генерируй ТОЛЬКО SPARQL запросы.
 
-ВАЖНЫЕ ПРАВИЛА WIKIDATA:
+ПРАВИЛА:
 1. Всегда используй эти префиксы:
    PREFIX wd: <http://www.wikidata.org/entity/>
    PREFIX wdt: <http://www.wikidata.org/prop/direct/>
 
-2. СИНТАКСИЧЕСКИЕ ПРАВИЛА:
-   - ВСЕГДА включай полный SPARQL запрос с WHERE {}
-   - ВСЕГДА добавляй SERVICE wikibase:label ВНУТРИ WHERE {}
-   - Каждая тройка заканчивается точкой
-   - SERVICE wikibase:label должен быть ВНУТРИ WHERE {}
-   - LIMIT всегда за пределами WHERE {}
-   - Не добавляй обратные слэши (\)
-   - Всегда закрывай фигурные скобки
-   - Тройки можно объединять через точку с запятой, если у них один субъект
+2. Формат запроса:
+   SELECT ?answer
+   WHERE {
+     wd:Q... wdt:P... ?answer .
+   }
 
-SELECT ?answer
-WHERE {
-  wd:Q... wdt:P... ?answer .
-  SERVICE wikibase:label { bd:serviceParam wikibase:language "ru,en". }
-}
+3. НИКОГДА не добавляй пояснения. Только SPARQL запрос.
 """
