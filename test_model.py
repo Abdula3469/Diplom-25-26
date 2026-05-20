@@ -83,9 +83,8 @@ class SparqlOllamaTester:
         sparql = sparql.strip()
         
         return sparql
-    
+    # Это же отвечает за анализ результата генерации
     def analyze_result(self, generated: str, expected: str) -> dict:
-        """Анализирует результат генерации"""
         if generated is None:
             return {"type": "error", "message": "Не получилось извлечь sparql"}
         
@@ -177,10 +176,14 @@ class SparqlOllamaTester:
             
             results.append({
                 "question": question,
-                "result": analysis["type"],
-                "message": analysis["message"]
+                "expected": expected,
+                "generated": generated,
+                "match": is_match,
+                "reason": analysis["message"],
+                "time": result["time"]
             })
             
+            is_match = (analysis["type"] == "match")
             stats[analysis["type"]] = stats.get(analysis["type"], 0) + 1
             total_time += result["time"]
             
