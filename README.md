@@ -44,7 +44,12 @@ pip install transformers==4.36.0 peft==0.7.0 bitsandbytes==0.41.3 accelerate==0.
    ```bash
    ollama create sparql-assistant -f Modelfile
    ```
-3. Запустите модель для работы:
+3. Запустите модель для работы двумя способами:
+   **В терминале**
    ```bash
    ollama run sparql-assistant
+   ```
+   **В веб интефрейсе**
+   ```bash
+   ollama run Web.py
    ```
