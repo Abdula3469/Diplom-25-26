@@ -167,12 +167,21 @@ class SparqlOllamaTester:
             
             if not result["success"]:
                 stats["error"] += 1
-                results.append({"question": question, "result": "error", "message": result["error"]})
-                print(f" Ошибка: {result['error'][:60]}")
+                results.append({
+                    "question": question,
+                    "expected": expected,
+                    "generated": None,
+                    "match": False,
+                    "reason": f"Ошибка: {result['error']}",
+                    "time": result["time"]
+                })
+                print(f"Ошибка: {result['error'][:60]}")
                 continue
             
             generated = self.extract_sparql(result["response"])
             analysis = self.analyze_result(generated, expected)
+            
+            is_match = (analysis["type"] == "match")
             
             results.append({
                 "question": question,
@@ -183,7 +192,6 @@ class SparqlOllamaTester:
                 "time": result["time"]
             })
             
-            is_match = (analysis["type"] == "match")
             stats[analysis["type"]] = stats.get(analysis["type"], 0) + 1
             total_time += result["time"]
             
@@ -219,4 +227,5 @@ if __name__ == "__main__":
         sys.exit(1)
     
     tester = SparqlOllamaTester("qwen-sparql999.gguf")
+    tester.test_dataset(sys.argv[1])maTester("qwen-sparql999.gguf")
     tester.test_dataset(sys.argv[1])
