@@ -2,6 +2,8 @@ import tkinter as tk
 from tkinter import scrolledtext, messagebox
 import subprocess
 import threading
+import datetime
+import os
 
 class SparqlGUI:
     def __init__(self, root):
@@ -10,6 +12,10 @@ class SparqlGUI:
         self.root.geometry("800x650")
         self.root.resizable(True, True)
         self.model_name = "qwen-sparql999.gguf"
+        
+        self.log_file = "sparql_assistant.log"
+        self._init_log_file()
+        
         tk.Label(root, text="SPARQL Assistant", font=("Arial", 16, "bold")).pack(pady=10)
         tk.Label(root, text="Генерация SPARQL-запросов по вопросам на русском языке", font=("Arial", 10)).pack()
         self.status_model = tk.Label(root, text=f"Модель: {self.model_name}", fg="green", font=("Arial", 9))
@@ -40,6 +46,30 @@ class SparqlGUI:
         
         self.setup_context_menu()
         
+        # Кнопка просмотра логов (опционально)
+        self.view_logs_btn = tk.Button(root, text="Просмотреть логи", font=("Arial", 9),
+                                        command=self.view_logs, bg="#f0f0f0")
+        self.view_logs_btn.pack(pady=(0,10))
+    
+    def _init_log_file(self):
+        """Инициализирует файл лога (создает, если не существует)"""
+        if not os.path.exists(self.log_file):
+            with open(self.log_file, 'w', encoding='utf-8') as f:
+                f.write(f"=== ЛОГ SPARQL ASSISTANT ===\n")
+                f.write(f"Создан: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+                f.write("=" * 50 + "\n\n")
+    
+    def _log(self, level, message, sparql=None, error=None):
+        """Записывает событие в лог-файл"""
+        timestamp = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        with open(self.log_file, 'a', encoding='utf-8') as f:
+            f.write(f"[{timestamp}] [{level}]\n")
+            f.write(f"  Сообщение: {message}\n")
+            if sparql:
+                f.write(f"  SPARQL запрос:\n{sparql}\n")
+            if error:
+                f.write(f"  Ошибка: {error}\n")
+            f.write("-" * 50 + "\n")
     
     def setup_context_menu(self):
         """Создает контекстное меню для копирования текста"""
@@ -94,9 +124,22 @@ class SparqlGUI:
         self.result_text.mark_set(tk.INSERT, "1.0")
         self.result_text.see(tk.INSERT)
     
-    def set_question(self, question):
-        self.question_text.delete("1.0", tk.END)
-        self.question_text.insert("1.0", question)
+    def view_logs(self):
+        """Открывает окно с содержимым лог-файла"""
+        log_window = tk.Toplevel(self.root)
+        log_window.title("Журнал запросов")
+        log_window.geometry("700x500")
+        
+        log_text = scrolledtext.ScrolledText(log_window, wrap="word", font=("Courier", 9))
+        log_text.pack(fill="both", expand=True, padx=10, pady=10)
+        
+        try:
+            with open(self.log_file, 'r', encoding='utf-8') as f:
+                log_text.insert("1.0", f.read())
+        except Exception as e:
+            log_text.insert("1.0", f"Ошибка при чтении лога: {e}")
+        
+        log_text.config(state="disabled")
     
     def generate(self):
         question = self.question_text.get("1.0", tk.END).strip()
@@ -104,9 +147,12 @@ class SparqlGUI:
             messagebox.showwarning("Внимание", "Пожалуйста, введите вопрос")
             return
         
+        # Логируем запрос
+        self._log("INFO", f"Пользовательский запрос: {question}")
+        
         self.generate_btn.config(state="disabled")
         self.copy_btn.config(state="disabled")
-        self.status_label.config(text="Происходит генерация запроса, пожалуйста, подождите...")
+        self.status_label.config(text="Происходит генерация запроса, пожалуйста, дайте мне чаю...")
         self.result_text.delete("1.0", tk.END)
         
         thread = threading.Thread(target=self._call_ollama, args=(question,))
@@ -123,16 +169,26 @@ class SparqlGUI:
             
             if result.returncode == 0:
                 output = result.stdout.strip()
+                # Логируем успешный ответ
+                self._log("SUCCESS", f"Успешная генерация для запроса: {question}", sparql=output[:500])
                 self.root.after(0, self._update_result, output)
             else:
                 error_msg = result.stderr.strip()
+                # Логируем ошибку
+                self._log("ERROR", f"Ошибка при генерации для запроса: {question}", error=error_msg)
                 self.root.after(0, self._update_result, f"Ошибка:\n{error_msg}")
                 
         except subprocess.TimeoutExpired:
-            self.root.after(0, self._update_result, "Ошибка, превышено время ожидания в 60 секунд")
+            error_msg = "Превышено время ожидания"
+            self._log("ERROR", f"Таймаут при генерации для запроса: {question}", error=error_msg)
+            self.root.after(0, self._update_result, f"Ошибка, {error_msg}")
         except FileNotFoundError:
-            self.root.after(0, self._update_result, "Ошибка, Ollama не найден. Прошу, убедитесь, что Ollama установлен и запущен")
+            error_msg = "Ollama не найден. Убедитесь, что Ollama установлен и запущен"
+            self._log("ERROR", f"Ollama не найден при запросе: {question}", error=error_msg)
+            self.root.after(0, self._update_result, f"Ошибка, {error_msg}")
         except Exception as e:
+            error_msg = str(e)
+            self._log("ERROR", f"Исключение при генерации для запроса: {question}", error=error_msg)
             self.root.after(0, self._update_result, f"Ошибка, {e}")
     
     def _update_result(self, text):
