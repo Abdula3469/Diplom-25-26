@@ -46,7 +46,6 @@ class SparqlGUI:
         
         self.setup_context_menu()
         
-        # Кнопка просмотра логов (опционально)
         self.view_logs_btn = tk.Button(root, text="Просмотреть логи", font=("Arial", 9),
                                         command=self.view_logs, bg="#f0f0f0")
         self.view_logs_btn.pack(pady=(0,10))
@@ -55,9 +54,8 @@ class SparqlGUI:
         """Инициализирует файл лога (создает, если не существует)"""
         if not os.path.exists(self.log_file):
             with open(self.log_file, 'w', encoding='utf-8') as f:
-                f.write(f"=== ЛОГ SPARQL ASSISTANT ===\n")
+                f.write(f"ЛОГ SPARQL ASSISTANT\n")
                 f.write(f"Создан: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
-                f.write("=" * 50 + "\n\n")
     
     def _log(self, level, message, sparql=None, error=None):
         """Записывает событие в лог-файл"""
@@ -169,7 +167,6 @@ class SparqlGUI:
             
             if result.returncode == 0:
                 output = result.stdout.strip()
-                # Логируем успешный ответ
                 self._log("SUCCESS", f"Успешная генерация для запроса: {question}", sparql=output[:500])
                 self.root.after(0, self._update_result, output)
             else:
