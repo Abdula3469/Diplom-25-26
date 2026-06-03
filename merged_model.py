@@ -4,7 +4,7 @@ from peft import PeftModel
 import os
 #Тут загружается базовая модель, загружается на cpu
 base_model = AutoModelForCausalLM.from_pretrained(
-    "microsoft/phi-2",
+    "Qwen/Qwen2-1.5B-Instruct",
     torch_dtype=torch.float16,
     device_map="cpu",
     trust_remote_code=True
