@@ -145,8 +145,8 @@ trainer = Trainer(
 )
 trainer.train()
 # модель сохраняется
-model.save_pretrained("./qwen-final")
-tokenizer.save_pretrained("./qwen-final")
+model.save_pretrained("./qwen-lora")
+tokenizer.save_pretrained("./qwen-lora")
 print("конец")
 # Оценивается модель на валидационной выборке
 eval_trainer = Trainer(
