@@ -35,14 +35,14 @@ pip install transformers==4.36.0 peft==0.7.0 bitsandbytes==0.41.3 accelerate==0.
    ```
 2. Запустите конвертацию:
    ```bash
-   python convert_hf_to_gguf.py ../qwen-final-merged --outfile qwen-sparql999.gguf --outtype f16
+   python convert_hf_to_gguf.py ../qwen-merged --outfile qwen-sparql.gguf --outtype f16
    ```
 
 ## 5. Создание и запуск модели в Ollama
 1. Скопируйте файл `Modelfile` в папку `llama.cpp`.
 2. Создайте модель в Ollama:
    ```bash
-   ollama create sparql-assistant -f Modelfile
+   ollama create qwen-sparql -f Modelfile
    ```
 3. Запустите модель для работы двумя способами:
    1. **В терминале**
