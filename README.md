@@ -47,7 +47,7 @@ pip install transformers==4.36.0 peft==0.7.0 bitsandbytes==0.41.3 accelerate==0.
 3. Запустите модель для работы двумя способами:
    1. **В терминале**
    ```bash
-   ollama run sparql-assistant
+   ollama run qwen-sparql
    ```
    2. **В веб интефрейсе**
    ```bash
