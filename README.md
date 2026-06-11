@@ -10,8 +10,12 @@
 Откройте терминал в в текстовом редакторе и выполните следующую команду для установки необходимых библиотек:
 
 ```bash
-pip install torch==2.1.0 torchvision==0.16.0 torchaudio==2.1.0 --index-url https://download.pytorch.org/whl/cu118
-pip install transformers==4.36.0 peft==0.7.0 bitsandbytes==0.41.3 accelerate==0.25.0
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
+pip install transformers datasets accelerate peft
+pip install bitsandbytes scipy safetensors
+pip install requests jsonlines pandas
+pip install numpy scikit-learn matplotlib
+pip install sentence-transformers chromadb  # для RAG
 ```
 
 ## 3. Обучение и подготовка модели
