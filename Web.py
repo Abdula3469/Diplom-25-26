@@ -4,155 +4,438 @@ import subprocess
 import threading
 import datetime
 import os
-# главное окно приложения, заголовок, размер и имя модели
+import requests
+import re
+
+class WikidataRAG:
+    
+    def __init__(self):
+        self.wikidata_api = "https://www.wikidata.org/w/api.php"
+        self.session = requests.Session()
+        self.session.headers.update({
+            'User-Agent': 'SPARQL-Assistant/1.0',
+            'Accept': 'application/json'
+        })
+        self.cache = {}
+    
+    def search_entities(self, search: str, limit: int = 3):
+        
+        cache_key = f"search_{search}_{limit}"
+        if cache_key in self.cache:
+            return self.cache[cache_key]
+        
+        try:
+            params = {
+                'action': 'wbsearchentities',
+                'search': search,
+                'language': 'ru',
+                'format': 'json',
+                'limit': limit,
+                'type': 'item'
+            }
+            
+            response = self.session.get(self.wikidata_api, params=params, timeout=5)
+            
+            if response.status_code == 200:
+                data = response.json()
+                results = []
+                
+                for item in data.get('search', []):
+                    results.append({
+                        'id': item['id'],
+                        'label': item.get('label', search),
+                        'description': item.get('description', ''),
+                    })
+                
+                self.cache[cache_key] = results
+                return results
+            return []
+        except Exception as e:
+            print(f"Ошибка поиска: {e}")
+            return []
+    
+    def extract_entities_from_question(self, question: str) -> dict:
+        """
+        Извлекает ВСЕ сущности из вопроса
+        Возвращает: { 'main_entity': {...}, 'secondary_entity': {...}, 'property_hint': str }
+        """
+        
+        question_lower = question.lower()
+        
+        question_patterns = {
+            'author': {
+                'keywords': ['кто написал', 'автор', 'создал'],
+                'main_type': 'work', 
+                'secondary_type': 'author',
+                'property': 'P50'
+            },
+            'painter': {
+                'keywords': ['кто нарисовал', 'художник', 'изобразил', 'написал картину'],
+                'main_type': 'artwork',   
+                'secondary_type': 'artist', 
+                'property': 'P170'
+            },
+            'capital': {
+                'keywords': ['столица'],
+                'main_type': 'country',    
+                'secondary_type': 'city',  
+                'property': 'P36'
+            },
+            'location': {
+                'keywords': ['где находится', 'расположен'],
+                'main_type': 'place',      
+                'secondary_type': 'location', 
+                'property': 'P131'
+            },
+            'birth_place': {
+                'keywords': ['где родился', 'место рождения'],
+                'main_type': 'person',     
+                'secondary_type': 'place',  
+                'property': 'P19'
+            },
+            'death_place': {
+                'keywords': ['где умер', 'место смерти'],
+                'main_type': 'person',     
+                'secondary_type': 'place', 
+                'property': 'P20'
+            },
+            'death_date': {
+                'keywords': ['дата смерти', 'когда умер', 'год смерти'],
+                'main_type': 'person',   
+                'secondary_type': 'date', 
+                'property': 'P570'
+            },
+            'birth_date': {
+                'keywords': ['дата рождения', 'когда родился'],
+                'main_type': 'person',     
+                'secondary_type': 'date',    
+                'property': 'P569'
+            },
+            'currency': {
+                'keywords': ['денежная единица', 'валюта'],
+                'main_type': 'country',    
+                'secondary_type': 'currency', 
+                'property': 'P38'
+            },
+            'killer': {
+                'keywords': ['кто убил', 'убийца'],
+                'main_type': 'victim',     
+                'secondary_type': 'killer',  
+                'property': 'P157'
+            }
+        }
+        
+        question_type = None
+        for qtype, pattern in question_patterns.items():
+            if any(kw in question_lower for kw in pattern['keywords']):
+                question_type = qtype
+                break
+        
+        stop_words = {'кто', 'что', 'где', 'когда', 'почему', 'как', 'какой', 
+                     'какая', 'какое', 'какие', 'сколько', 'куда', 'откуда',
+                     'зачем', 'чей', 'чья', 'чье'}
+        
+        clean_question = question_lower
+        for word in stop_words:
+            clean_question = clean_question.replace(word, '')
+        
+        for qtype, pattern in question_patterns.items():
+            for kw in pattern['keywords']:
+                clean_question = clean_question.replace(kw, '')
+        
+        clean_question = re.sub(r'[^\w\s]', ' ', clean_question)
+        clean_question = re.sub(r'\s+', ' ', clean_question).strip()
+        
+        words = clean_question.split()
+        
+        result = {
+            'main_entity': None,
+            'secondary_entity': None,
+            'property_hint': None,
+            'question_type': question_type,
+            'found_count': 0
+        }
+        
+        if question_type:
+            pattern = question_patterns[question_type]
+            result['property_hint'] = pattern['property']
+            
+            for n in range(min(3, len(words)), 0, -1):
+                for i in range(len(words) - n + 1):
+                    phrase = ' '.join(words[i:i+n])
+                    if len(phrase) > 2:
+                        entities = self.search_entities(phrase, limit=1)
+                        if entities:
+                            result['main_entity'] = {
+                                'qid': entities[0]['id'],
+                                'label': entities[0]['label'],
+                                'search': phrase
+                            }
+                            break
+                if result['main_entity']:
+                    break
+            
+            if not result['main_entity']:
+                entities = self.search_entities(question, limit=1)
+                if entities:
+                    result['main_entity'] = {
+                        'qid': entities[0]['id'],
+                        'label': entities[0]['label'],
+                        'search': question
+                    }
+        
+        else:
+            for n in range(min(3, len(words)), 0, -1):
+                for i in range(len(words) - n + 1):
+                    phrase = ' '.join(words[i:i+n])
+                    if len(phrase) > 2:
+                        entities = self.search_entities(phrase, limit=1)
+                        if entities:
+                            result['main_entity'] = {
+                                'qid': entities[0]['id'],
+                                'label': entities[0]['label'],
+                                'search': phrase
+                            }
+                            break
+                if result['main_entity']:
+                    break
+        
+        if result['main_entity']:
+            result['found_count'] = 1
+        
+        return result
+    
+    def get_search_context(self, question: str) -> dict:
+        entities = self.extract_entities_from_question(question)
+        
+        return {
+            'found': entities['found_count'] > 0,
+            'main_entity': entities['main_entity'],
+            'property_hint': entities['property_hint'],
+            'question_type': entities['question_type'],
+            'search_query': entities['main_entity']['search'] if entities['main_entity'] else question
+        }
+
+
 class SparqlGUI:
     def __init__(self, root):
         self.root = root
-        self.root.title("SPARQL Assistant")
-        self.root.geometry("800x650")
+        self.root.title("Qwen-sparql")
+        self.root.geometry("950x800")
         self.root.resizable(True, True)
+        
         self.model_name = "qwen-sparql"
-        # инициализируется лог файл,
+        self.rag = WikidataRAG()
+        
         self.log_file = "sparql_assistant.log"
         self._init_log_file()
-        # Заголовок и статус модели
-        tk.Label(root, text="SPARQL Assistant", font=("Arial", 16, "bold")).pack(pady=10)
-        tk.Label(root, text="Генерация SPARQL-запросов по вопросам на русском языке", font=("Arial", 10)).pack()
-        self.status_model = tk.Label(root, text=f"Модель: {self.model_name}", fg="green", font=("Arial", 9))
-        self.status_model.pack(pady=5)
-        # Поле для ввода вопроса
-        tk.Label(root, text="Вопрос:", anchor="w", font=("Arial", 11)).pack(pady=(15,5), padx=10, anchor="w")
-        self.question_text = tk.Text(root, height=5, font=("Arial", 11), wrap="word")
-        self.question_text.pack(fill="x", padx=10)
-        # Кнопка генерации
-        self.generate_btn = tk.Button(root, text="Сгенерировать SPARQL", font=("Arial", 11),
-                                      command=self.generate, bg="#3498db", fg="white")
-        self.generate_btn.pack(pady=10)
         
-        self.status_label = tk.Label(root, text="", fg="gray")
+        self.setup_ui()
+    
+    def setup_ui(self):
+        colors = {
+            'bg': '#f5f5f5',
+            'primary': '#2c3e50',
+            'secondary': '#3498db',
+            'success': '#27ae60',
+            'info': '#e8f4f8',
+            'warning': '#fef9e7'
+        }
+        
+        self.root.configure(bg=colors['bg'])
+        
+        title_frame = tk.Frame(self.root, bg=colors['primary'], height=50)
+        title_frame.pack(fill="x")
+        
+        title = tk.Label(title_frame, text="SPARQL Assistant", 
+                        font=("Arial", 16, "bold"), fg="white", bg=colors['primary'])
+        title.pack(pady=12)
+        
+        status_frame = tk.Frame(self.root, bg=colors['bg'])
+        status_frame.pack(fill="x", padx=15, pady=(10, 5))
+        
+        self.status_model = tk.Label(status_frame, text=f"Модель: {self.model_name}", 
+                                     font=("Arial", 9), bg=colors['bg'], fg=colors['primary'])
+        self.status_model.pack(side=tk.LEFT)
+        
+        main_frame = tk.Frame(self.root, bg=colors['bg'])
+        main_frame.pack(fill="both", expand=True, padx=15, pady=10)
+        
+        tk.Label(main_frame, text="Вопрос:", font=("Arial", 11, "bold"), 
+                bg=colors['bg']).pack(anchor="w", pady=(0, 5))
+        
+        self.question_text = tk.Text(main_frame, height=4, font=("Arial", 11), 
+                                     wrap="word", relief="solid", borderwidth=1)
+        self.question_text.pack(fill="x", pady=(0, 10))
+        
+        btn_frame = tk.Frame(main_frame, bg=colors['bg'])
+        btn_frame.pack(fill="x", pady=(0, 10))
+        
+        self.generate_btn = tk.Button(btn_frame, text="Модель генерирует SPARQL", 
+                                      font=("Arial", 12, "bold"), command=self.generate,
+                                      bg=colors['secondary'], fg="white", height=2)
+        self.generate_btn.pack(side=tk.LEFT, fill="x", expand=True)
+        
+        self.clear_btn = tk.Button(btn_frame, text="Очистить", 
+                                   font=("Arial", 11), command=self.clear,
+                                   bg=colors['primary'], fg="white", height=2)
+        self.clear_btn.pack(side=tk.LEFT, padx=(10, 0))
+        
+        self.status_label = tk.Label(main_frame, text="", font=("Arial", 9), 
+                                     bg=colors['bg'], fg=colors['primary'])
         self.status_label.pack()
-        # Облачсть куда выводится результат
-        result_frame = tk.Frame(root)
-        result_frame.pack(fill="both", expand=True, padx=10, pady=(10,0))
         
-        tk.Label(result_frame, text="SPARQL запрос:", anchor="w", font=("Arial", 11)).pack(anchor="w")
+        context_frame = tk.LabelFrame(main_frame, text="RAG контекст (найдено в Wikidata)", 
+                                      font=("Arial", 9, "bold"), bg=colors['bg'])
+        context_frame.pack(fill="x", pady=(10, 5))
         
-        self.copy_btn = tk.Button(result_frame, text="Копировать", font=("Arial", 9),
-                                  command=self.copy_to_clipboard, bg="#f0f0f0")
-        self.copy_btn.pack(anchor="e", pady=(0,5))
+        self.context_text = tk.Text(context_frame, height=5, font=("Arial", 9), 
+                                    wrap="word", bg=colors['info'], relief="flat")
+        self.context_text.pack(fill="both", expand=True, padx=5, pady=5)
         
-        self.result_text = scrolledtext.ScrolledText(result_frame, height=12, font=("Courier", 10), wrap="word")
-        self.result_text.pack(fill="both", expand=True)
+        prompt_frame = tk.LabelFrame(main_frame, text="Промпт к модели", 
+                                     font=("Arial", 9, "bold"), bg=colors['bg'])
+        prompt_frame.pack(fill="x", pady=(5, 5))
         
-        self.setup_context_menu()
+        self.prompt_text = tk.Text(prompt_frame, height=4, font=("Arial", 9), 
+                                   wrap="word", bg=colors['warning'], relief="flat")
+        self.prompt_text.pack(fill="both", expand=True, padx=5, pady=5)
         
-        # Кнопка просмотра логов (опционально)
-        self.view_logs_btn = tk.Button(root, text="Просмотреть логи", font=("Arial", 9),
-                                        command=self.view_logs, bg="#f0f0f0")
-        self.view_logs_btn.pack(pady=(0,10))
+        result_frame = tk.LabelFrame(main_frame, text="SPARQL запрос", 
+                                     font=("Arial", 10, "bold"), bg=colors['bg'])
+        result_frame.pack(fill="both", expand=True, pady=(5, 0))
+        
+        result_btn_frame = tk.Frame(result_frame, bg=colors['bg'])
+        result_btn_frame.pack(fill="x", padx=5, pady=5)
+        
+        self.copy_btn = tk.Button(result_btn_frame, text="Копировать", 
+                                  font=("Arial", 9), command=self.copy_sparql,
+                                  bg=colors['success'], fg="white")
+        self.copy_btn.pack(side=tk.LEFT, padx=2)
+        
+        self.result_text = scrolledtext.ScrolledText(result_frame, height=10, 
+                                                     font=("Courier", 11), wrap="word")
+        self.result_text.pack(fill="both", expand=True, padx=5, pady=5)
     
     def _init_log_file(self):
         if not os.path.exists(self.log_file):
             with open(self.log_file, 'w', encoding='utf-8') as f:
-                f.write(f"ЛОГ SPARQL ASSISTANT\n")
+                f.write(f"ЛОГ ОБУЧЕНИЯ МОДЕЛИ SPARQL\n")
                 f.write(f"Создан: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
-    # Функция логирования
-    def _log(self, level, message, sparql=None, error=None):
+    
+    def _log(self, level, message, sparql=None, error=None, prompt=None):
         timestamp = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         with open(self.log_file, 'a', encoding='utf-8') as f:
             f.write(f"[{timestamp}] [{level}]\n")
             f.write(f"  Сообщение: {message}\n")
+            if prompt:
+                f.write(f"  Промпт:\n{prompt}\n")
             if sparql:
-                f.write(f"  SPARQL запрос:\n{sparql}\n")
+                f.write(f"  SPARQL ответ:\n{sparql}\n")
             if error:
                 f.write(f"  Ошибка: {error}\n")
             f.write("-" * 50 + "\n")
-    # Создается контекстное меню
-    def setup_context_menu(self):
-        self.context_menu = tk.Menu(self.root, tearoff=0)
-        self.context_menu.add_command(label="Копировать", command=self.copy_to_clipboard)
-        self.context_menu.add_command(label="Вырезать", command=self.cut_text)
-        self.context_menu.add_command(label="Выделить всё", command=self.select_all)
-        
-        self.result_text.bind("<Button-3>", self.show_context_menu)
-        self.question_text.bind("<Button-3>", self.show_context_menu)
     
-    def show_context_menu(self, event):
-        try:
-            self.context_menu.tk_popup(event.x_root, event.y_root)
-        finally:
-            self.context_menu.grab_release()
-    
-    def copy_to_clipboard(self):
-        try:
-            selected = self.result_text.get(tk.SEL_FIRST, tk.SEL_LAST)
+    def copy_sparql(self):
+        text = self.result_text.get("1.0", tk.END).strip()
+        if text and not text.startswith("Ошибка"):
             self.root.clipboard_clear()
-            self.root.clipboard_append(selected)
+            self.root.clipboard_append(text)
             self.status_label.config(text="Скопировано", fg="green")
             self.root.after(2000, lambda: self.status_label.config(text="", fg="gray"))
-        except tk.TclError:
-            all_text = self.result_text.get("1.0", tk.END).strip()
-            if all_text:
-                self.root.clipboard_clear()
-                self.root.clipboard_append(all_text)
-                self.status_label.config(text="Скопировано все", fg="green")
-                self.root.after(2000, lambda: self.status_label.config(text="", fg="gray"))
-            else:
-                self.status_label.config(text="Нечего копировать", fg="red")
-                self.root.after(2000, lambda: self.status_label.config(text="", fg="gray"))
     
-    def cut_text(self):
-        try:
-            selected = self.result_text.get(tk.SEL_FIRST, tk.SEL_LAST)
-            self.copy_to_clipboard()
-            self.result_text.delete(tk.SEL_FIRST, tk.SEL_LAST)
-            self.status_label.config(text="Вырезано", fg="green")
-            self.root.after(2000, lambda: self.status_label.config(text="", fg="gray"))
-        except tk.TclError:
-            pass
+    def clear(self):
+        self.question_text.delete("1.0", tk.END)
+        self.context_text.delete("1.0", tk.END)
+        self.prompt_text.delete("1.0", tk.END)
+        self.result_text.delete("1.0", tk.END)
+        self.status_label.config(text="")
     
-    def select_all(self):
-        self.result_text.tag_add(tk.SEL, "1.0", tk.END)
-        self.result_text.mark_set(tk.INSERT, "1.0")
-        self.result_text.see(tk.INSERT)
-    # позволяет посмотреть логи
-    def view_logs(self):
-        log_window = tk.Toplevel(self.root)
-        log_window.title("Журнал запросов")
-        log_window.geometry("700x500")
-        
-        log_text = scrolledtext.ScrolledText(log_window, wrap="word", font=("Courier", 9))
-        log_text.pack(fill="both", expand=True, padx=10, pady=10)
-        
-        try:
-            with open(self.log_file, 'r', encoding='utf-8') as f:
-                log_text.insert("1.0", f.read())
-        except Exception as e:
-            log_text.insert("1.0", f"Ошибка при чтении лога: {e}")
-        
-        log_text.config(state="disabled")
-    # Основная логика генерации
     def generate(self):
         question = self.question_text.get("1.0", tk.END).strip()
         if not question:
             messagebox.showwarning("Внимание", "Пожалуйста, введите вопрос")
             return
         
-        # Логируем запрос
         self._log("INFO", f"Пользовательский запрос: {question}")
         
         self.generate_btn.config(state="disabled")
         self.copy_btn.config(state="disabled")
-        self.status_label.config(text="Происходит генерация запроса, пожалуйста, подождите...")
+        self.status_label.config(text="RAG: поиск в Wikidata...", fg="orange")
         self.result_text.delete("1.0", tk.END)
+        self.context_text.delete("1.0", tk.END)
+        self.prompt_text.delete("1.0", tk.END)
         
-        thread = threading.Thread(target=self._call_ollama, args=(question,))
+        thread = threading.Thread(target=self._process, args=(question,))
+        thread.daemon = True
         thread.start()
-    # Вызываетяс Ollama
-    def _call_ollama(self, question):
+    
+    def _process(self, question):
         try:
+            context = self.rag.get_search_context(question)
+            
+            if context['found']:
+                context_info = f"""Найдено в Wikidata:
+• Тип вопроса: {context['question_type'] or 'общий'}
+• Основная сущность: {context['main_entity']['label']} (QID: {context['main_entity']['qid']})
+• Найдено по запросу: '{context['main_entity']['search']}'
+• Рекомендуемое свойство: {context['property_hint'] or 'модель определит сама'}"""
+                
+                self._log("INFO", f"RAG нашел: {context['main_entity']['label']} ({context['main_entity']['qid']})")
+                
+                if context['property_hint']:
+                    prompt = f"""Ты эксперт по SPARQL запросам для Wikidata.
+
+Вопрос: {question}
+
+Найдена сущность в Wikidata:
+- Название: {context['main_entity']['label']}
+- QID: {context['main_entity']['qid']}
+
+Рекомендуемое свойство: {context['property_hint']}
+
+Сгенерируй SPARQL запрос:
+PREFIX wd: <http://www.wikidata.org/entity/>
+PREFIX wdt: <http://www.wikidata.org/prop/direct/>
+SELECT ?answer WHERE {{ wd:{context['main_entity']['qid']} wdt:{context['property_hint']} ?answer . }}
+
+Только SPARQL запрос, без пояснений."""
+                else:
+                    prompt = f"""Ты эксперт по SPARQL запросам для Wikidata.
+
+Вопрос: {question}
+
+Найдена сущность в Wikidata:
+- Название: {context['main_entity']['label']}
+- QID: {context['main_entity']['qid']}
+
+Сгенерируй SPARQL запрос, используя QID {context['main_entity']['qid']}.
+Ты сам определи нужное свойство.
+
+Формат: PREFIX wd: <http://www.wikidata.org/entity/> PREFIX wdt: <http://www.wikidata.org/prop/direct/> SELECT ?answer WHERE {{ wd:{context['main_entity']['qid']} wdt:P??? ?answer . }}
+
+Только SPARQL запрос."""
+            else:
+                context_info = f"""Сущность не найдена в Wikidata
+• Поисковый запрос: '{context['search_query']}'"""
+                
+                prompt = f"""Ты эксперт по SPARQL запросам для Wikidata.
+
+Вопрос: {question}
+
+Сущность не найдена. Используй шаблон:
+PREFIX wd: <http://www.wikidata.org/entity/>
+PREFIX wdt: <http://www.wikidata.org/prop/direct/>
+SELECT ?answer WHERE {{ wd:Q??? wdt:P??? ?answer . }}
+
+Только SPARQL запрос."""
+            
+            self.root.after(0, self._update_context, context_info)
+            self.root.after(0, self._update_prompt, prompt)
+            self.root.after(0, self.status_label.config, {"text": "Модель генерирует...", "fg": "orange"})
+            
             result = subprocess.run(
-                ['ollama', 'run', self.model_name, question],
+                ['ollama', 'run', self.model_name, prompt],
                 capture_output=True,
                 text=True,
                 timeout=60
@@ -160,34 +443,57 @@ class SparqlGUI:
             
             if result.returncode == 0:
                 output = result.stdout.strip()
-                # Логируем успешный ответ
-                self._log("SUCCESS", f"Успешная генерация для запроса: {question}", sparql=output[:500])
-                self.root.after(0, self._update_result, output)
+                clean_output = self._clean_sparql(output)
+                
+                self._log("SUCCESS", f"Модель сгенерировала SPARQL", sparql=clean_output, prompt=prompt)
+                self.root.after(0, self._update_result, clean_output)
+                self.root.after(0, self.status_label.config, {"text": "Готово", "fg": "green"})
             else:
                 error_msg = result.stderr.strip()
-                # Логируем ошибку
-                self._log("ERROR", f"Ошибка при генерации для запроса: {question}", error=error_msg)
-                self.root.after(0, self._update_result, f"Ошибка:\n{error_msg}")
+                self._log("ERROR", f"Ошибка модели", error=error_msg)
+                self.root.after(0, self._update_result, f"Ошибка: {error_msg}")
+                self.root.after(0, self.status_label.config, {"text": "❌ Ошибка", "fg": "red"})
                 
-        except subprocess.TimeoutExpired:
-            error_msg = "Превышено время ожидания"
-            self._log("ERROR", f"Таймаут при генерации для запроса: {question}", error=error_msg)
-            self.root.after(0, self._update_result, f"Ошибка, {error_msg}")
-        except FileNotFoundError:
-            error_msg = "Ollama не найден. Убедитесь, что Ollama установлен и запущен"
-            self._log("ERROR", f"Ollama не найден при запросе: {question}", error=error_msg)
-            self.root.after(0, self._update_result, f"Ошибка, {error_msg}")
         except Exception as e:
-            error_msg = str(e)
-            self._log("ERROR", f"Исключение при генерации для запроса: {question}", error=error_msg)
-            self.root.after(0, self._update_result, f"Ошибка, {e}")
-    # Выводится текст в соответствующее поле
+            self.root.after(0, self._update_result, f"Ошибка: {e}")
+            self.root.after(0, self.status_label.config, {"text": "Ошибка", "fg": "red"})
+        finally:
+            self.root.after(0, lambda: self.generate_btn.config(state="normal"))
+            self.root.after(0, lambda: self.copy_btn.config(state="normal"))
+    
+    def _clean_sparql(self, text: str) -> str:
+        text = re.sub(r'wdQ(\d+)', r'wd:Q\1', text)
+        text = re.sub(r'wdtP(\d+)', r'wdt:P\1', text)
+        
+        patterns = [
+            r'(PREFIX\s+wd:.*?PREFIX\s+wdt:.*?SELECT\s+\?answer\s+WHERE\s*\{[^}]+\})',
+            r'(SELECT\s+\?answer\s+WHERE\s*\{[^}]+\})'
+        ]
+        
+        for pattern in patterns:
+            match = re.search(pattern, text, re.DOTALL | re.IGNORECASE)
+            if match:
+                result = match.group(1).strip()
+                if 'PREFIX' not in result:
+                    result = """PREFIX wd: <http://www.wikidata.org/entity/>
+PREFIX wdt: <http://www.wikidata.org/prop/direct/>
+""" + result
+                return result
+        
+        return text
+    
+    def _update_context(self, text):
+        self.context_text.delete("1.0", tk.END)
+        self.context_text.insert("1.0", text)
+    
+    def _update_prompt(self, text):
+        self.prompt_text.delete("1.0", tk.END)
+        self.prompt_text.insert("1.0", text)
+    
     def _update_result(self, text):
+        self.result_text.delete("1.0", tk.END)
         self.result_text.insert("1.0", text)
-        self.status_label.config(text="Готово")
-        self.generate_btn.config(state="normal")
-        self.copy_btn.config(state="normal")
-# Запуск
+
 if __name__ == "__main__":
     root = tk.Tk()
     app = SparqlGUI(root)
