@@ -24,13 +24,8 @@ pip install numpy scikit-learn matplotlib
 pip install sentence-transformers chromadb
 pip install ollama
 pip install llama-cpp-python
-pip install gradio  # или streamlit
+pip install gradio
 pip install SPARQLWrapper
-pip install tqdm wandb tensorboard
-pip install pyyaml
-pip install plotly seaborn
-pip install faiss-cpu  # или faiss-gpu
-pip install flash-attn --no-build-isolation
 ```
 
 ## 3. Обучение и подготовка модели
