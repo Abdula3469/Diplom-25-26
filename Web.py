@@ -8,7 +8,6 @@ import requests
 import re
 
 class WikidataRAG:
-    
     def __init__(self):
         self.wikidata_api = "https://www.wikidata.org/w/api.php"
         self.session = requests.Session()
@@ -19,7 +18,6 @@ class WikidataRAG:
         self.cache = {}
     
     def search_entities(self, search: str, limit: int = 3):
-        
         cache_key = f"search_{search}_{limit}"
         if cache_key in self.cache:
             return self.cache[cache_key]
@@ -55,75 +53,157 @@ class WikidataRAG:
             return []
     
     def extract_entities_from_question(self, question: str) -> dict:
-        """
-        Извлекает ВСЕ сущности из вопроса
-        Возвращает: { 'main_entity': {...}, 'secondary_entity': {...}, 'property_hint': str }
-        """
         
         question_lower = question.lower()
         
         question_patterns = {
-            'author': {
-                'keywords': ['кто написал', 'автор', 'создал'],
-                'main_type': 'work', 
-                'secondary_type': 'author',
-                'property': 'P50'
-            },
-            'painter': {
-                'keywords': ['кто нарисовал', 'художник', 'изобразил', 'написал картину'],
-                'main_type': 'artwork',   
-                'secondary_type': 'artist', 
-                'property': 'P170'
-            },
-            'capital': {
-                'keywords': ['столица'],
-                'main_type': 'country',    
-                'secondary_type': 'city',  
-                'property': 'P36'
-            },
-            'location': {
-                'keywords': ['где находится', 'расположен'],
-                'main_type': 'place',      
-                'secondary_type': 'location', 
-                'property': 'P131'
-            },
-            'birth_place': {
-                'keywords': ['где родился', 'место рождения'],
-                'main_type': 'person',     
-                'secondary_type': 'place',  
-                'property': 'P19'
-            },
-            'death_place': {
-                'keywords': ['где умер', 'место смерти'],
-                'main_type': 'person',     
-                'secondary_type': 'place', 
-                'property': 'P20'
-            },
-            'death_date': {
-                'keywords': ['дата смерти', 'когда умер', 'год смерти'],
-                'main_type': 'person',   
-                'secondary_type': 'date', 
-                'property': 'P570'
-            },
-            'birth_date': {
-                'keywords': ['дата рождения', 'когда родился'],
-                'main_type': 'person',     
-                'secondary_type': 'date',    
-                'property': 'P569'
-            },
-            'currency': {
-                'keywords': ['денежная единица', 'валюта'],
-                'main_type': 'country',    
-                'secondary_type': 'currency', 
-                'property': 'P38'
-            },
-            'killer': {
-                'keywords': ['кто убил', 'убийца'],
-                'main_type': 'victim',     
-                'secondary_type': 'killer',  
-                'property': 'P157'
-            }
-        }
+    'country': {
+        'keywords': ['страна', 'государство', 'какая страна', 'в какой стране'],
+        'main_type': 'entity',
+        'secondary_type': 'country',
+        'property': 'P17'
+    },
+    
+    'capital': {
+        'keywords': ['столица', 'главный город'],
+        'main_type': 'country',
+        'secondary_type': 'city',
+        'property': 'P36'
+    },
+    
+    'author': {
+        'keywords': ['кто написал', 'автор', 'создал', 'написал'],
+        'main_type': 'work',
+        'secondary_type': 'author',
+        'property': 'P50'
+    },
+    
+    'administrative_unit': {
+        'keywords': ['административная единица', 'регион', 'область', 'край', 'республика'],
+        'main_type': 'entity',
+        'secondary_type': 'administrative_unit',
+        'property': 'P131' 
+    },
+    
+    'birth_place': {
+        'keywords': ['где родился', 'место рождения', 'родился'],
+        'main_type': 'person',
+        'secondary_type': 'place',
+        'property': 'P19'
+    },
+    
+    'creator': {
+        'keywords': ['создатель', 'кто создал', 'основал'],
+        'main_type': 'entity',
+        'secondary_type': 'creator',
+        'property': 'P170' 
+    },
+    
+    'location': {
+        'keywords': ['место нахождения', 'где находится', 'расположен', 'находится'],
+        'main_type': 'entity',
+        'secondary_type': 'location',
+        'property': 'P276' 
+    },
+    
+    'composer': {
+        'keywords': ['композитор', 'кто написал музыку', 'написал музыку'],
+        'main_type': 'musical_work',
+        'secondary_type': 'composer',
+        'property': 'P86'
+    },
+    
+    'performer': {
+        'keywords': ['исполнитель', 'кто исполнил', 'поет', 'певец', 'певица'],
+        'main_type': 'musical_work',
+        'secondary_type': 'performer',
+        'property': 'P175'
+    },
+    
+    'director': {
+        'keywords': ['режиссёр', 'кто снял', 'постановщик'],
+        'main_type': 'film',
+        'secondary_type': 'director',
+        'property': 'P57'
+    },
+    
+    'instance_of': {
+        'keywords': ['что такое', 'кто такой', 'является', 'это'],
+        'main_type': 'entity',
+        'secondary_type': 'instance',
+        'property': 'P31'
+    },
+    
+    'founder': {
+        'keywords': ['основатель', 'кто основал'],
+        'main_type': 'organization',
+        'secondary_type': 'founder',
+        'property': 'P112'
+    },
+    
+    'currency': {
+        'keywords': ['денежная единица', 'валюта'],
+        'main_type': 'country',
+        'secondary_type': 'currency',
+        'property': 'P38'
+    },
+    
+    'citizenship': {
+        'keywords': ['гражданство', 'подданство', 'гражданин'],
+        'main_type': 'person',
+        'secondary_type': 'citizenship',
+        'property': 'P27'
+    },
+    
+    'spouse': {
+        'keywords': ['супруг', 'супруга', 'муж', 'жена', 'кто был женат'],
+        'main_type': 'person',
+        'secondary_type': 'spouse',
+        'property': 'P26'
+    },
+    
+    'death_date': {
+        'keywords': ['дата смерти', 'когда умер', 'год смерти'],
+        'main_type': 'person',
+        'secondary_type': 'date',
+        'property': 'P570'
+    },
+    
+    'birth_date': {
+        'keywords': ['дата рождения', 'когда родился', 'год рождения'],
+        'main_type': 'person',
+        'secondary_type': 'date',
+        'property': 'P569'
+    },
+    
+    'killer': {
+        'keywords': ['кто убил', 'убийца'],
+        'main_type': 'victim',
+        'secondary_type': 'killer',
+        'property': 'P157'
+    },
+    
+    'occupation': {
+        'keywords': ['профессия', 'кем работает', 'кем был', 'род деятельности'],
+        'main_type': 'person',
+        'secondary_type': 'occupation',
+        'property': 'P106'
+    },
+    
+    'height': {
+        'keywords': ['высота', 'рост', 'какой высоты', 'сколько метров'],
+        'main_type': 'entity',
+        'secondary_type': 'height',
+        'property': 'P2044'
+    },
+    
+    'population': {
+        'keywords': ['население', 'жителей', 'сколько людей', 'численность'],
+        'main_type': 'entity',
+        'secondary_type': 'population',
+        'property': 'P1082'
+    }
+}
         
         question_type = None
         for qtype, pattern in question_patterns.items():
@@ -224,7 +304,7 @@ class SparqlGUI:
         self.root.geometry("950x800")
         self.root.resizable(True, True)
         
-        self.model_name = "qwen-sparql"
+        self.model_name = "qwen-2026"
         self.rag = WikidataRAG()
         
         self.log_file = "sparql_assistant.log"
@@ -423,7 +503,7 @@ SELECT ?answer WHERE {{ wd:{context['main_entity']['qid']} wdt:{context['propert
 
 Вопрос: {question}
 
-Сущность не найдена. Используй шаблон:
+Сущность не найдена, используй шаблон:
 PREFIX wd: <http://www.wikidata.org/entity/>
 PREFIX wdt: <http://www.wikidata.org/prop/direct/>
 SELECT ?answer WHERE {{ wd:Q??? wdt:P??? ?answer . }}
@@ -452,7 +532,7 @@ SELECT ?answer WHERE {{ wd:Q??? wdt:P??? ?answer . }}
                 error_msg = result.stderr.strip()
                 self._log("ERROR", f"Ошибка модели", error=error_msg)
                 self.root.after(0, self._update_result, f"Ошибка: {error_msg}")
-                self.root.after(0, self.status_label.config, {"text": "❌ Ошибка", "fg": "red"})
+                self.root.after(0, self.status_label.config, {"text": "Ошибка", "fg": "red"})
                 
         except Exception as e:
             self.root.after(0, self._update_result, f"Ошибка: {e}")
